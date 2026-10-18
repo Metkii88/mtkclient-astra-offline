@@ -35,7 +35,7 @@ APPIMAGE_EXTRACT_AND_RUN=1 ./mtkclient-x86_64.AppImage
 
 ```bash
 sha256sum mtkclient-x86_64.AppImage
-# 34f45a1f2facd5a43ac7193f90fbd83475263ea57d1e6bc431f3cfb9e5387167
+# 52150c6cfcc583eede3bd3c05eee136aade29b0b9764071438e2fa92004f6d5c
 ```
 
 Сборка образа воспроизводится скриптом [`appimage-build/build-appimage.sh`](appimage-build/build-appimage.sh)
