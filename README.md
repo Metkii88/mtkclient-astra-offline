@@ -10,7 +10,38 @@ exploit-режимы BROM/DA). Пакет собран так, чтобы на �
 > комплекта под Astra Linux 1.7 «Орёл» (x86-64). Весь код mtkclient принадлежит авторам
 > оригинального проекта.
 
-## Что внутри архива
+## Вариант 1: AppImage (рекомендуется — без установки вообще)
+
+Самый простой способ: скачайте **`mtkclient-x86_64.AppImage`** (~155 МБ) из
+[Releases](../../releases) — один переносимый файл, внутри Python 3.8.10, mtkclient
+и PySide6 (GUI). Ничего устанавливать не нужно, системный Python не требуется:
+
+```bash
+chmod +x mtkclient-x86_64.AppImage
+./mtkclient-x86_64.AppImage                 # запуск GUI
+./mtkclient-x86_64.AppImage devices         # CLI-режим
+./mtkclient-x86_64.AppImage r /dev/sda BOOTA boot.img   # пример чтения
+```
+
+Если на системе нет FUSE (на Astra с параноидальным уровнем безопасности бывает),
+запустите так же, как при сборке, или через распаковку:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./mtkclient-x86_64.AppImage
+# либо: ./mtkclient-x86_64.AppImage --appimage-extract && ./squashfs-root/AppRun
+```
+
+Контрольная сумма:
+
+```bash
+sha256sum mtkclient-x86_64.AppImage
+# 34f45a1f2facd5a43ac7193f90fbd83475263ea57d1e6bc431f3cfb9e5387167
+```
+
+Сборка образа воспроизводится скриптом [`appimage-build/build-appimage.sh`](appimage-build/build-appimage.sh)
+(Docker + linuxdeploy + plugin-Qt, окружение Ubuntu 20.04 ради старого glibc).
+
+## Вариант 2: Установка в систему (tar.gz)
 
 Скачайте `mtkclient-offline.tar.gz` из [Releases](../../releases) (~314 МБ):
 
