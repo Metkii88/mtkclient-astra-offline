@@ -27,9 +27,11 @@ PYSHORT=$("$PYBIN" -c 'import sys;print("%d.%d"%sys.version_info[:2])')
 echo "Используется интерпретатор: $PYBIN (Python $PYSHORT)"
 
 WHEELS=wheels                       # набор по умолчанию (python>=3.9)
+SRCDIR=src                          # исходники mtkclient
 if [ "$PYSHORT" = "3.8" ]; then
     WHEELS=wheels38                 # версии под Python 3.8 + PySide6 (GUI)
-    echo "[*] Выбраны wheels из $WHEELS/ (Python 3.8, GUI поддерживается)"
+    SRCDIR=src38                    # пропатчен кодом «X | None» (PEP 604) для py3.8
+    echo "[*] Выбраны wheels из $WHEELS/ и исходники $SRCDIR/ (Python 3.8, GUI поддерживается)"
 elif [ "$PYSHORT" = "3.7" ]; then
     echo "[!] Внимание: Python 3.7 найден. GUI на нём не работает (нужен >=3.8)."
     echo "    Запустите сначала:  sudo ./build-python38.sh   — и повторите установку."
@@ -58,30 +60,50 @@ fi
 echo "[*] Установка python-пакетов из $WHEELS/ ..."
 "$PYBIN" -m pip install --no-index --find-links="$WHEELS" \
     --no-deps pyusb pycryptodome pycryptodomex colorama pyserial capstone \
-    unicorn mfusepy keystone-engine shiboken6 PySide6-Essentials mtkclient
+    unicorn mfusepy keystone-engine shiboken6 PySide6-Essentials mtkclient 2>/dev/null || {
+    # если pip недоступен — распаковываем wheels вручную в site-packages
+    echo "[!] pip недоступен, устанавливаю wheels распаковкой..."
+    SP=$("$PYBIN" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+    mkdir -p "$SP"
+    for w in "$WHEELS"/*.whl; do
+        [ -e "$w" ] || continue
+        case "$(basename "$w")" in *cp38*) : ;; esac
+        "$PYBIN" -c "
+import zipfile,sys
+zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
+" "$w" "$SP"
+    done
+}
 
 # 3. udev-правила для входа в BootROM-режим MediaTek
 echo "[*] Установка udev-правил..."
-install -m 644 src/Setup/Linux/*.rules /etc/udev/rules.d/ 2>/dev/null || \
-install -m 644 src/Setup/linux/*.rules /etc/udev/rules.d/
+install -m 644 $SRCDIR/Setup/Linux/*.rules /etc/udev/rules.d/ 2>/dev/null || \
+install -m 644 $SRCDIR/Setup/linux/*.rules /etc/udev/rules.d/ 2>/dev/null || \
+echo "[!] udev-правила не найдены — для USB от обычного пользователя добавьте их вручную."
 udevadm control --reload-rules && udevadm trigger || true
 
-# 4. Команды запуска mtk / mtk_gui (указывают на выбранный интерпретатор)
+# 4. Команды запуска mtk / mtk_gui (указывают на выбранный интерпретатор).
+#    PYTHONPATH=каталог исходников: на Python 3.8 используется пропатченный
+#    набор src38 (аннотации вида «X | None» из PEP 604 работают только с py3.10+,
+#    future-annotations включает их и на 3.8).
 echo "[*] Создание команд /usr/local/bin/mtk и /usr/local/bin/mtk_gui ..."
+SRCABS=$(cd "$SRCDIR" && pwd)
 cat > /usr/local/bin/mtk <<EOF
 #!/bin/sh
-exec $PYBIN $(pwd)/src/mtk.py "\$@"
+PYTHONPATH=$SRCABS exec $PYBIN $SRCABS/mtk.py "\$@"
 EOF
 cat > /usr/local/bin/mtk_gui <<EOF
 #!/bin/sh
-exec $PYBIN $(pwd)/src/mtk_gui.py "\$@"
+PYTHONPATH=$SRCABS exec $PYBIN $SRCABS/mtk_gui.py "\$@"
 EOF
 chmod +x /usr/local/bin/mtk /usr/local/bin/mtk_gui
 
 # 5. Проверка
 echo "[*] Проверка установки..."
-"$PYBIN" -c "import usb, Cryptodome, serial, capstone, unicorn, keystone, mtkclient; print('OK: ядро mtkclient импортируется')"
-"$PYBIN" -c "import PySide6.QtWidgets; print('OK: PySide6 (GUI) импортируется')" || \
+PYTHONPATH="$SRCABS" "$PYBIN" -c "import usb, Cryptodome, serial, capstone, unicorn, keystone, mtkclient; print('OK: ядро mtkclient импортируется')"
+PYTHONPATH="$SRCABS" "$PYBIN" -c "import ctypes; print('OK: ctypes (криптография) работает')" || \
+    echo "[!] ВНИМАНИЕ: модуль ctypes отсутствует — пересоберите Python: sudo rm -rf /opt/python38 && sudo ./build-python38.sh (нужен libffi-dev)."
+PYTHONPATH="$SRCABS" "$PYBIN" -c "import PySide6.QtWidgets; print('OK: PySide6 (GUI) импортируется')" || \
     echo "[!] GUI не запустится: не хватает Qt-библиотек (libgl1, libxkbcommon0 и др.) — CLI работает."
 
 cat <<'EOF'

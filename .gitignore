@@ -1,5 +1,11 @@
-mtkclient-offline.tar.gz
-mtkclient/
-mtkclient-offline/python/
 *.pyc
 __pycache__/
+build/
+dist/
+.venv/
+venv/
+.vscode/
+.idea/
+.env
+.env.local
+mtkclient-offline.tar.gz

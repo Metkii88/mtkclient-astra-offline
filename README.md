@@ -70,6 +70,15 @@ mtk_gui                     # графический интерфейс рабо
   в папку `debs/`.
 * Без Qt-вариант: на чистом Python 3.7 работает **только CLI** (`mtk`).
 
+### Частые проблемы при сборке Python 3.8
+
+| Симптом в логе | Причина | Решение |
+|---|---|---|
+| `fatal error: ffi.h: Нет такого файла или каталога` (падает `_ctypes`) | не установлен `libffi-dev` | `sudo apt install libffi-dev` (или `.deb` в `debs/`), затем пересобрать: `sudo rm -rf /opt/python38 && sudo ./build-python38.sh` |
+| `can't open file 'ensurepip': [Errno 2] No such file or directory` | wheel pip отсутствовал в дереве исходников | исправлено: скрипт сам подкладывает `wheels38/pip-*.whl` и `setuptools-*.whl` в `Lib/ensurepip/_bundled/` до сборки; если pip всё же не поставился — `install.sh` устанавливает wheels распаковкой, без pip |
+| warnings `'tp_print' is deprecated`, `-Wunused-but-set-variable`, `siginterrupt is deprecated` | штатные предупреждения компилятора на код CPython 3.8 | игнорировать — на результат не влияют |
+| `WARNING: The script pip3.8 is installed in '/opt/python38/bin' which is not on PATH` | норма для `altinstall` | использовать полные пути (`/opt/python38/bin/python3.8`) — скрипты так и делают |
+
 ## Использование
 
 ```bash
