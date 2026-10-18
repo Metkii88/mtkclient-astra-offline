@@ -2,8 +2,8 @@
 # ============================================================
 #  Сборка и установка Python 3.8.10 из исходников (офлайн)
 #  для Astra Linux 1.7 «Орёл» / «Белый Горизонт» (x86-64)
-#  Требуется: sudo, gcc/make (пакеты build-essential + libssl-dev
-#  берутся из штатного репозитория Astra или из папки debs/).
+#  Требуется: sudo, gcc/make + dev-пакеты (build-essential, libffi-dev,
+#  libssl-dev, zlib1g-dev ... — из штатного репозитория Astra или debs/).
 #  Python ставится в /opt/python38 — системный python3 НЕ трогается.
 # ============================================================
 set -e
@@ -16,17 +16,35 @@ fi
 
 PYVER=3.8.10
 PREFIX=/opt/python38
+PYBIN=$PREFIX/bin/python3.8
 
-if [ -x "$PREFIX/bin/python3.8" ]; then
-    echo "[*] Python 3.8 уже установлен в $PREFIX — пропускаю сборку."
-    exit 0
+# ---------------------------------------------------------------
+# 0a. Если /opt/python38 уже есть — проверяем его целостность.
+#     Ранее бывали «недозагруженные» установки (например, сборка упала
+#     на _ctypes из-за отсутствия libffi-dev, но часть файлов установилась).
+#     Такой Python удаляем и пересобираем с нуля.
+# ---------------------------------------------------------------
+if [ -x "$PYBIN" ]; then
+    if ! "$PYBIN" -c "import ctypes, ssl, zlib, bz2, sqlite3, readline" >/dev/null 2>&1; then
+        echo "[!] Найден неполноценный $PREFIX (не хватает модулей ctypes/ssl/...)."
+        echo "    Удаляю и пересобираю с нуля..."
+        rm -rf "$PREFIX" /tmp/Python-$PYVER
+    else
+        echo "[*] Python 3.8 уже установлен и полностью работоспособен:"
+        "$PYBIN" -V
+        if ! "$PYBIN" -m pip --version >/dev/null 2>&1; then
+            echo "[*] pip отсутствует — доустанавливаю офлайн..."
+            bootstrap_pip || echo "[!] pip не поставлен — install.sh работает без него."
+        fi
+        echo "[*] Пропускаю сборку. Дальше:  sudo ./install.sh"
+        exit 0
+    fi
 fi
 
 DEBS_LOCAL=""
 [ -d debs ] && DEBS_LOCAL=$(ls debs/*.deb 2>/dev/null || true)
 
 need_pkgs() {
-    # возвращает 0, если какого-то пакета/заголовка нет
     command -v gcc  >/dev/null || return 0
     command -v make >/dev/null || return 0
     for h in ffi.h openssl/ssl.h zlib.h bzlib.h readline/readline.h sqlite3.h ncurses.h; do
@@ -35,10 +53,50 @@ need_pkgs() {
     return 1
 }
 
-# 1. Пакеты для компиляции (обязательно: gcc, make, libffi-dev, libssl-dev,
-#    zlib1g-dev, libbz2-dev, libreadline-dev, libsqlite3-dev, libncursesw5-dev).
-#    БЕЗ libffi-dev модуль _ctypes НЕ соберётся (fatal error: ffi.h) и
-#    mtkclient затем падает при импорте — проверка ниже это ловит.
+# ---------------------------------------------------------------
+# Функция офлайн-установки pip для python3.8 (используется и после
+# сборки, и для «доустановки» в уже готовую инсталляцию).
+# Сетевые вызовы исключены (--no-index).
+# ---------------------------------------------------------------
+bootstrap_pip() {
+    local PIPW SETW TMP SP
+    # способ 1: ensurepip (работает, если python собран с bundled wheel'ами)
+    "$PYBIN" -m ensurepip --upgrade >/dev/null 2>&1 || true
+    "$PYBIN" -m pip --version >/dev/null 2>&1 && return 0
+
+    # способ 2: распаковка wheel'а pip напрямую в site-packages (без pip вообще)
+    PIPW=$(ls wheels38/pip-*.whl 2>/dev/null | head -1)
+    if [ -n "$PIPW" ]; then
+        echo "[*] Установка pip из $(basename "$PIPW") напрямую (распаковкой) ..."
+        SP="$("$PYBIN" -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
+        mkdir -p "$SP"
+        TMP=$(mktemp -d)
+        "$PYBIN" -m zipfile -e "$PIPW" "$TMP"
+        # в wheel'е каталоги pip/ и pip-<ver>.data/ — копируем что есть
+        [ -d "$TMP/pip" ] && cp -a "$TMP/pip" "$SP"/
+        for d in "$TMP"/pip-*; do
+            case "$d" in *.dist-info|*.data) : ;; *) [ -d "$d" ] && cp -a "$d" "$SP"/ ;; esac
+        done
+        if [ -d "$TMP/pip-"*".data/scripts" ]; then
+            cp -a "$TMP"/pip-*.data/scripts/* "$PREFIX/bin/" 2>/dev/null || true
+            chmod +x "$PREFIX"/bin/pip* 2>/dev/null || true
+        fi
+        rm -rf "$TMP"
+        "$PYBIN" -m pip --version >/dev/null 2>&1 && return 0
+    fi
+
+    # способ 3: get-pip.py строго офлайн из wheels38/
+    if [ -f wheels38/get-pip.py ]; then
+        echo "[*] Установка pip через get-pip.py (--no-index) ..."
+        "$PYBIN" wheels38/get-pip.py --no-index --find-links=wheels38 \
+            --no-warn-script-location >/dev/null 2>&1 || true
+        "$PYBIN" -m pip --version >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+
+# 1. Пакеты для компиляции. БЕЗ libffi-dev модуль _ctypes не соберётся
+#    (fatal error: ffi.h), без libssl-dev — ssl/hashlib.
 if need_pkgs; then
     if [ -n "$DEBS_LOCAL" ]; then
         echo "[*] Установка пакетов сборки из локальных debs/ ..."
@@ -58,62 +116,50 @@ if need_pkgs; then
         }
 fi
 
+
 # 2. Распаковка и сборка
 echo "[*] Распаковка Python-$PYVER ..."
 rm -rf /tmp/Python-$PYVER
 tar xf "python/Python-$PYVER.tgz" -C /tmp
 
-# 2a. ДОБАВЛЯЕМ wheel pip/setuptools в исходники ДО сборки.
-#     В стандартном tarball они лежат в Lib/ensurepip/_bundled/, но если архив
-#     был собран без них (или использован --without-pip), то после установки
-#     python3.8 -m ensurepip падает с "can't open file 'ensurepip'".
-#     Кладём нужные wheel-файлы из wheels38/ прямо в дерево исходников.
+# 2a. Гарантируем наличие bundled wheel'ов pip/setuptools в дереве исходников
+#     (на случай повреждённого/урезанного tarball).
 mkdir -p /tmp/Python-$PYVER/Lib/ensurepip/_bundled
-cp -f wheels38/pip-*.whl wheels38/setuptools-*.whl /tmp/Python-$PYVER/Lib/ensurepip/_bundled/ 2>/dev/null || true
+cp -f wheels38/pip-*.whl wheels38/setuptools-*.whl \
+    /tmp/Python-$PYVER/Lib/ensurepip/_bundled/ 2>/dev/null || true
 
 echo "[*] Конфигурация и сборка (займёт 5–15 минут) ..."
 cd /tmp/Python-$PYVER
-# ВАЖНО: НЕ используем --without-pip; configure сам обнаружит ffi.h/openssl/zlib...
-# Предупреждения вида "'tp_print' is deprecated", "-Wunused-but-set-variable",
-# "siginterrupt is deprecated" — ШТАТНЫЕ для CPython 3.8, на результат НЕ влияют.
+# Предупреждения вида "'tp_print' is deprecated", "-Wunused-but-set-variable"
+# — ШТАТНЫЕ для CPython 3.8, на результат НЕ влияют.
 ./configure --prefix=$PREFIX --enable-shared \
     LDFLAGS="-Wl,-rpath,$PREFIX/lib" >/dev/null
 make -j"$(nproc)" >/dev/null
 make altinstall >/dev/null     # altinstall: не создаёт /usr/local/bin/python3
 
-# 3. КРИТИЧНАЯ проверка: ctypes нужен mtkclient (AES/RSA), ssl — для сети/DA
-if ! $PREFIX/bin/python3.8 -c "import ctypes, ssl, zlib, bz2, sqlite3, readline" 2>/dev/null; then
+# 3. КРИТИЧНАЯ проверка модулей
+if ! "$PYBIN" -c "import ctypes, ssl, zlib, bz2, sqlite3, readline" 2>/dev/null; then
     echo "[!] ОШИБКА: Python собрался без критичных модулей (ctypes/ssl/...)."
     echo "    Чаще всего не хватает libffi-dev / libssl-dev / zlib1g-dev."
     echo "    Поставьте их (или положите .deb в debs/) и запустите скрипт снова:"
     echo "      sudo rm -rf /opt/python38 && sudo ./build-python38.sh"
     exit 1
 fi
-$PREFIX/bin/python3.8 -V
+"$PYBIN" -V
 echo "[*] Python 3.8 собран успешно"
 
-# 4. pip для python3.8 — офлайн, тремя способами (по убыванию надёжности)
-if ! $PREFIX/bin/python3.8 -m pip --version >/dev/null 2>&1; then
-    echo "[*] Установка pip через ensurepip ..."
-    $PREFIX/bin/python3.8 -m ensurepip --upgrade 2>/dev/null || true
+# 4. pip — офлайн (см. bootstrap_pip выше)
+if ! "$PYBIN" -m pip --version >/dev/null 2>&1; then
+    bootstrap_pip || echo "[!] Не удалось установить pip. install.sh работает и без него (ставит wheels распаковкой)."
 fi
-if ! $PREFIX/bin/python3.8 -m pip --version >/dev/null 2>&1; then
-    # если wheel pip лежит в wheels38/ — ставим его напрямую (без сети)
-    echo "[*] Установка pip из wheels38/pip-*.whl напрямую ..."
-    PIPW=$(ls wheels38/pip-*.whl 2>/dev/null | head -1)
-    [ -n "$PIPW" ] && $PREFIX/bin/python3.8 -m zipfile -e "$PIPW" /tmp/pip-extract \
-        && PYTHONPATH=/tmp/pip-extract $PREFIX/bin/python3.8 -m pip install --no-index \
-            --find-links=wheels38 pip setuptools 2>/dev/null && rm -rf /tmp/pip-extract || true
+if "$PYBIN" -m pip --version >/dev/null 2>&1; then
+    echo "[*] pip установлен: $("$PYBIN" -m pip --version)"
 fi
-if ! $PREFIX/bin/python3.8 -m pip --version >/dev/null 2>&1; then
-    # последний вариант — get-pip.py (нужна версия под py3.8: bootstrap.pypa.io/pip/3.8/get-pip.py)
-    echo "[*] Установка pip через get-pip.py ..."
-    $PREFIX/bin/python3.8 wheels38/get-pip.py --no-index --find-links=wheels38 2>/dev/null || true
-fi
-if $PREFIX/bin/python3.8 -m pip --version >/dev/null 2>&1; then
-    echo "[*] pip установлен: $($PREFIX/bin/python3.8 -m pip --version)"
-else
-    echo "[!] Не удалось установить pip. install.sh работает и без него (ставит wheels напрямую)."
+
+# 5. Регистрация общей библиотеки (для GUI / сторонних модулей)
+if [ -f "$PREFIX/lib/libpython3.8.so.1.0" ]; then
+    echo "$PREFIX/lib" > /etc/ld.so.conf.d/python38.conf
+    ldconfig
 fi
 
 echo "[*] Теперь запустите:  sudo ./install.sh   (он сам найдёт python3.8)"

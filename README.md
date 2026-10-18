@@ -29,7 +29,7 @@ mtkclient-offline/
 
 ```bash
 sha256sum mtkclient-offline.tar.gz
-# 437980c4837dca200fb8553edec25bcb624a1c9faaec589a92dc084dd9146e71
+# 619ac5e0979b54b46db986b403487d4970acba76be0a6144591cff55f1b7e41e
 ```
 
 ## Быстрая установка (Astra 1.7, штатный Python 3.11)
@@ -75,7 +75,7 @@ mtk_gui                     # графический интерфейс рабо
 | Симптом в логе | Причина | Решение |
 |---|---|---|
 | `fatal error: ffi.h: Нет такого файла или каталога` (падает `_ctypes`) | не установлен `libffi-dev` | `sudo apt install libffi-dev` (или `.deb` в `debs/`), затем пересобрать: `sudo rm -rf /opt/python38 && sudo ./build-python38.sh` |
-| `can't open file 'ensurepip': [Errno 2] No such file or directory` | wheel pip отсутствовал в дереве исходников | исправлено: скрипт сам подкладывает `wheels38/pip-*.whl` и `setuptools-*.whl` в `Lib/ensurepip/_bundled/` до сборки; если pip всё же не поставился — `install.sh` устанавливает wheels распаковкой, без pip |
+| `can\'t open file \'ensurepip\': [Errno 2] No such file or directory` | в `/opt/python38` осталась «недозагруженная» установка Python от прошлой неудачной сборки (например, после падения на `_ctypes` из-за `libffi-dev`) — интерпретатор есть, а модулей pip/ensurepip в нём нет | **обновлено:** запустите `sudo ./build-python38.sh` повторно — скрипт теперь проверяет целостность существующей установки (`import ctypes, ssl, ...`), при проблемах удаляет `/opt/python38` и пересобирает с нуля, а pip доустанавливает офлайн тремя способами (ensurepip → распаковка `wheels38/pip-*.whl` напрямую в site-packages → `get-pip.py --no-index`). Можно и без пересборки: `install.sh` ставит все wheels распаковкой, pip ему не обязателен |
 | warnings `'tp_print' is deprecated`, `-Wunused-but-set-variable`, `siginterrupt is deprecated` | штатные предупреждения компилятора на код CPython 3.8 | игнорировать — на результат не влияют |
 | `WARNING: The script pip3.8 is installed in '/opt/python38/bin' which is not on PATH` | норма для `altinstall` | использовать полные пути (`/opt/python38/bin/python3.8`) — скрипты так и делают |
 
