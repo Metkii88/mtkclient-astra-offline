@@ -1,0 +1,5 @@
+mtkclient-offline.tar.gz
+mtkclient/
+mtkclient-offline/python/
+*.pyc
+__pycache__/
