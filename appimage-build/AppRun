@@ -1,0 +1,29 @@
+#!/bin/bash
+# AppRun — точка входа mtkclient AppImage
+# (C) 2026, сборка для Astra Linux 1.7 Орёл и других glibc-дистрибутивов
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+# Переносимый Python 3.8 внутри образа
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/extra:${HERE}/usr/lib/python3.8/site-packages/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Путь до stdlib собранного интерпретатора (на случай перемещения образов)
+export PYTHONHOME="${HERE}/usr"
+
+# Qt-плагины (platforms/xcb и т.д.) — берём из образа, игнорируя системные
+QTDIR="${HERE}/usr/lib/python3.8/site-packages/PySide6/Qt"
+export QT_PLUGIN_PATH="${QTDIR}/plugins"
+export QML2_IMPORT_PATH="${QTDIR}/qml"
+export QML_IMPORT_PATH="${QTDIR}/qml"
+# Принудительно xcb для X11-сессий Астра (LEDE/XFCE); Wayland не требуется
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+
+# Режимы: gui (по умолчанию, двойной клик), либо все CLI-аргументы mtk
+case "$1" in
+    ""|gui)
+        exec "${HERE}/usr/bin/python3.8" "${HERE}/usr/bin/mtk_gui"
+        ;;
+    *)
+        exec "${HERE}/usr/bin/python3.8" "${HERE}/usr/bin/mtk" "$@"
+        ;;
+esac
