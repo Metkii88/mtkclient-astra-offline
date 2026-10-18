@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MTKClient
+GenericName=MediaTek flash tool
+Comment=Read/write MediaTek flashes, BROM/DA exploits (offline AppImage for Astra Linux)
+Exec=mtk_gui
+TryExec=mtk_gui
+Icon=mtkclient
+Terminal=false
+Categories=System;FileTools;Development;
+Keywords=mtk;mediatek;flash;bootloader;repair;
