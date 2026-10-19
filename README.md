@@ -35,8 +35,12 @@ APPIMAGE_EXTRACT_AND_RUN=1 ./mtkclient-x86_64.AppImage
 
 ```bash
 sha256sum mtkclient-x86_64.AppImage
-# 52150c6cfcc583eede3bd3c05eee136aade29b0b9764071438e2fa92004f6d5c
+# 0267c49f2986f343e30b7c0882c20abc02732a7099e753c8d23f35c6a2004ccb
 ```
+
+Образ полностью автономен: libfuse2, libxcb-*, Qt-плагины и все библиотеки встроены
+внутрь (mfusepy находит libfuse через `FUSE_LIBRARY_PATH` из AppRun), поэтому GUI и CLI
+работают даже на системах без FUSE и без дополнительных пакетов.
 
 Сборка образа воспроизводится скриптом [`appimage-build/build-appimage.sh`](appimage-build/build-appimage.sh)
 (Docker + linuxdeploy + plugin-Qt, окружение Ubuntu 20.04 ради старого glibc).

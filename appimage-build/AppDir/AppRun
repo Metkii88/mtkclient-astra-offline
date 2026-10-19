@@ -7,6 +7,9 @@ HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="${HERE}/usr/bin:${PATH}"
 export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/extra:${HERE}/usr/lib/python3.8/site-packages/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# libfuse2 берём из образа — mfusepy/mtkclient работают без системного FUSE
+export FUSE_LIBRARY_PATH="${HERE}/usr/lib/extra/libfuse.so.2"
+
 # Путь до stdlib собранного интерпретатора (на случай перемещения образов)
 export PYTHONHOME="${HERE}/usr"
 
