@@ -35,7 +35,7 @@ APPIMAGE_EXTRACT_AND_RUN=1 ./mtkclient-x86_64.AppImage
 
 ```bash
 sha256sum mtkclient-x86_64.AppImage
-# 0267c49f2986f343e30b7c0882c20abc02732a7099e753c8d23f35c6a2004ccb
+# c8c99f5cfc17abe5b14494be8e9d22332ad2456c44e98c5c0d4c95766bd11a6b
 ```
 
 Образ полностью автономен: libfuse2, libxcb-*, Qt-плагины и все библиотеки встроены
